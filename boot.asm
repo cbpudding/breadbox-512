@@ -9,7 +9,7 @@
 	jmp sprite      ; 0x07CE
 	jmp pixel       ; 0x07D0
 	jmp set_palette ; 0x07D2
-	jmp map_keys    ; 0x07D4
+	jmp set_keymap  ; 0x07D4
 start:
 	mov ax, 09C0h ; Set up the stack
 	mov ss, ax
@@ -23,9 +23,41 @@ start:
 	jmp game ; Jump to the game's code
 input: ; Sets al a bitfield containing which of the eight keys on the map are pressed
 	pusha ; Preserve registers
-	; TODO
-	popa ; Restore registers and return
+	mov ah, [state] ; Restore the state from when this was last run
+.read:
+	in al, 64h ; Check if the keyboard has sent us any data
+	and al, 1
+	jz .done ; Skip if no data is ready
+	mov bh, al ; Otherwise, check to see if the key is in the keymap
+	and bh, 7Fh
+	mov bl, al
+	and bl, 80h
+	mov cl, 1
+	mov si, keymap
+.scan:
+	lodsb
+	cmp al, bh
+	je .toggle
+	shl cl, 1
+	cmp cl, 0
+	jz .read
+	jmp .scan
+.toggle:
+	cmp bl, 0 ; Determine whether to set or clear the bit
+	jz .set
+	not cl ; If we've reached this point, we're clearing the bit.
+	and ah, cl
+	mov [state], ah ; Save the new state
+	jmp .read ; Then we check to see if there's another keystroke waiting
+.set:
+	or ah, cl ; Set the bit
+	mov [state], ah ; Save the new state
+	jmp .read
+.done:
+	popa ; Restore registers, set al, and return
+	mov al, [state]
 	ret
+	state db 0 ; The last known input state
 delay: ; ax = milliseconds
 	pusha ; Preserve registers
 	mov bx, 1000 ; Convert milliseconds into something the BIOS understands
@@ -140,25 +172,42 @@ set_palette: ; al = palette number
 	pop ax ; Restore the state of the register
 	ret
 	palette db 0
-map_keys: ; si = Keys to map
+set_keymap: ; si = Keys to map
 	pusha ; Preserve registers
-	; TODO
+	mov cl, 8 ; Import eight keys into the keymap
+	mov di, keymap
+.loop:
+	lodsb
+	and al, 7Fh ; Make sure all the keys are in the "off" state
+	stosb
+	dec cl
+	cmp cl, 0 ; Return once we're finished
+	je .done
+	jmp .loop
+.done:
 	popa ; Restore registers and return
 	ret
-	times 256-($-$$) db 0
+	keymap db 17, 30, 31, 32, 22, 35, 36, 37 ; W, A, S, D, U, H, J, K
+	times 356-($-$$) db 0
 game:
 	xor al, al ; Set the color palette to 0
 	call palette
 	call clear ; Clear the screen
 	mov si, test_sprite ; Display the test sprite at (0, 0)
 	xor ax, ax
-	xor bh, bh
+	mov bh, 2
 	call sprite
 	mov ax, 220 ; Play a 220Hz square wave
 	call tone
 	mov eax, 1000 ; Wait a second
 	call delay
 	call mute ; Stop the sound
+.loop:
+	call input ; Collect the current user input
+	movzx bx, al ; Display the user input as a pixel
+	xor ax, ax
+	call pixel
+	jmp .loop
 	jmp $ ; Infinite loop!
 test_sprite:
 	db 00000101b, 00111001b, 01110111b
