@@ -4,12 +4,12 @@
 	jmp input       ; 0x07C4
 	jmp delay       ; 0x07C6
 	jmp tone        ; 0x07C8
-	jmp mute        ; 0x07CA
-	jmp clear       ; 0x07CC
-	jmp sprite      ; 0x07CE
-	jmp pixel       ; 0x07D0
-	jmp set_palette ; 0x07D2
-	jmp set_keymap  ; 0x07D4
+	jmp mute        ; 0x07CB
+	jmp clear       ; 0x07CE
+	jmp sprite      ; 0x07D2
+	jmp pixel       ; 0x07D5
+	jmp set_palette ; 0x07D8
+	jmp set_keymap  ; 0x07DB
 start:
 	mov ax, 09C0h ; Set up the stack
 	mov ss, ax
@@ -190,25 +190,23 @@ set_keymap: ; si = Keys to map
 	keymap db 17, 30, 31, 32, 22, 35, 36, 37 ; W, A, S, D, U, H, J, K
 	times 356-($-$$) db 0
 game:
-	xor al, al ; Set the color palette to 0
-	call palette
 	call clear ; Clear the screen
-	mov si, test_sprite ; Display the test sprite at (0, 0)
-	xor ax, ax
+	xor ax, ax ; Draw the test pattern at (0, 2)
 	mov bh, 2
+	mov si, test_sprite
 	call sprite
 	mov ax, 220 ; Play a 220Hz square wave
 	call tone
-	mov eax, 1000 ; Wait a second
+	mov ax, 500 ; Wait for 500ms
 	call delay
-	call mute ; Stop the sound
+	call mute ; Silence!
 .loop:
-	call input ; Collect the current user input
-	movzx bx, al ; Display the user input as a pixel
+	call input ; Collect input and display it as a pixel at (0, 0)
+	mov bl, al
 	xor ax, ax
+	xor bh, bh
 	call pixel
-	jmp .loop
-	jmp $ ; Infinite loop!
+	jmp .loop ; Let's do it again!
 test_sprite:
 	db 00000101b, 00111001b, 01110111b
 	db 00000101b, 00111001b, 01110111b
