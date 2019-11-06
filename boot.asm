@@ -21,7 +21,7 @@ start:
 	mov ax, 13h ; Move into 320x200x256 mode
 	int 10h
 	jmp game ; Jump to the game's code
-input: ; Sets al a bitfield containing which of the eight keys on the map are pressed
+input: ; Sets al to a bitfield containing which of the eight keys on the map are pressed
 	pusha ; Preserve registers
 	mov ah, [state] ; Restore the state from when this was last run
 .read:
@@ -108,10 +108,11 @@ clear: ; Works as advertised
 .done:
 	popa ; Restore the registers and return
 	ret
-sprite: ; si = sprite, ax = x, bh = y
+sprite: ; si = sprite, ax = x, bh = y, bl = alpha
 	pusha ; Preserve registers
 	mov dx, ax ; Move ax to dx for later use
 	xor cx, cx ; Set the row(ch) and column numbers(cl) to 0
+	mov [alpha], bl ; Save the alpha for later
 .line:
 	xor eax, eax ; Load the line into eax
 	lodsb
@@ -121,8 +122,11 @@ sprite: ; si = sprite, ax = x, bh = y
 	lodsb
 	shl eax, 8
 .pixel:
-	rol eax, 3 ; Load the color into bl
-	mov bl, al
+	rol eax, 3 ; Load the color into al
+	mov bl, [alpha] ; Check and see if the color matches the alpha
+	cmp al, bl
+	je .skip ; We aren't drawing this pixel if the color matches the alpha
+	mov bl, al ; Move the color to bl
 	pusha ; Preserve the registers for later
 	mov ax, dx ; Move the x coordinate to ax
 	add bh, ch ; Calculate the offsets of the initial coordinates
@@ -130,6 +134,7 @@ sprite: ; si = sprite, ax = x, bh = y
 	add ax, cx
 	call pixel ; Draw the pixel we calculated
 	popa ; Restore the registers from earlier
+.skip:
 	xor al, al ; Clear the pixel data
 	inc cl ; Move to the next pixel
 	cmp cl, 8
@@ -144,6 +149,7 @@ sprite: ; si = sprite, ax = x, bh = y
 .done:
 	popa ; Restore registers and return
 	ret
+	alpha db 0
 pixel: ; ax = x, bh = y, bl = color
 	pusha ; Preserve registers
 ;	cmp ax, 320 ; Make sure the pixel will be drawn on the screen
@@ -189,59 +195,27 @@ set_keymap: ; si = Keys to map
 	popa ; Restore registers and return
 	ret
 	keymap db 17, 30, 31, 32, 22, 35, 36, 37 ; W, A, S, D, U, H, J, K
-	times 356-($-$$) db 0
+	times 363-($-$$) db 0
 game:
-	call input ; Collect input from the keyboard
-	mov ah, al ; Use WASD for movement
-	and ah, 1 ; "W"
-	jz .up
-	mov ah, al
-	and ah, 2 ; "A"
-	jz .left
-	mov ah, al
-	and ah, 4 ; "S"
-	jz .right
-	mov ah, al
-	and ah, 8 ; "D"
-	jz .down
-	jmp .draw
-.up:
-	mov bh, [y]
-	dec bh
-	mov [y], bh
-	jmp .draw
-.left:
-	mov ax, [x]
-	dec ax
-	mov [x], ax
-	jmp .draw
-.down:
-	mov bh, [y]
-	inc bh
-	mov [y], bh
-	jmp .draw
-.right:
-	mov ax, [x]
-	inc ax
-	mov [x], ax
-	jmp .draw
-.draw:
-	call clear
-	mov ax, [x] ; Render the test sprite where it's supposed to be
-	mov bh, [y]
+	mov al, 5 ; Set to palette number 5
+	call set_palette
+	xor ax, ax ; Draw the sprite at (0, 0)
+	mov bx, 256
 	mov si, test_sprite
 	call sprite
-	jmp game
-	x dw 0
-	y db 0
+	mov ax, 220 ; 220Hz square wave
+	call tone
+	mov ax, 50 ; 50ms delay
+	call delay
+	call mute ; Mute the speaker
 test_sprite:
-	db 00000101b, 00111001b, 01110111b
-	db 00000101b, 00111001b, 01110111b
-	db 00000101b, 00111001b, 01110111b
-	db 00000101b, 00111001b, 01110111b
-	db 00000101b, 00111001b, 01110111b
-	db 00000101b, 00111001b, 01110111b
-	db 00000101b, 00111001b, 01110111b
-	db 00000101b, 00111001b, 01110111b
+	db 00000001b, 10110110b, 11000000b
+	db 00000000b, 00110110b, 11011000b
+	db 01101101b, 10110110b, 11011011b
+	db 01100001b, 10110110b, 11000011b
+	db 01100001b, 10110110b, 11000011b
+	db 00000001b, 10000000b, 11000000b
+	db 00000001b, 10000000b, 11000000b
+	db 00001101b, 10000000b, 11011000b
 	times 510-($-$$) db 0
 	dw 0AA55h
