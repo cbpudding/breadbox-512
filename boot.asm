@@ -27,8 +27,9 @@ input: ; Sets al a bitfield containing which of the eight keys on the map are pr
 .read:
 	in al, 64h ; Check if the keyboard has sent us any data
 	and al, 1
-	jz .done ; Skip if no data is ready
-	mov bh, al ; Otherwise, check to see if the key is in the keymap
+	jnz .done ; Skip if no data is ready
+	in al, 60h ; Otherwise, check to see if the key is in the keymap
+	mov bh, al
 	and bh, 7Fh
 	mov bl, al
 	and bl, 80h
@@ -190,23 +191,49 @@ set_keymap: ; si = Keys to map
 	keymap db 17, 30, 31, 32, 22, 35, 36, 37 ; W, A, S, D, U, H, J, K
 	times 356-($-$$) db 0
 game:
-	call clear ; Clear the screen
-	xor ax, ax ; Draw the test pattern at (0, 2)
-	mov bh, 2
+	call input ; Collect input from the keyboard
+	mov ah, al ; Use WASD for movement
+	and ah, 1 ; "W"
+	jz .up
+	mov ah, al
+	and ah, 2 ; "A"
+	jz .left
+	mov ah, al
+	and ah, 4 ; "S"
+	jz .right
+	mov ah, al
+	and ah, 8 ; "D"
+	jz .down
+	jmp .draw
+.up:
+	mov bh, [y]
+	dec bh
+	mov [y], bh
+	jmp .draw
+.left:
+	mov ax, [x]
+	dec ax
+	mov [x], ax
+	jmp .draw
+.down:
+	mov bh, [y]
+	inc bh
+	mov [y], bh
+	jmp .draw
+.right:
+	mov ax, [x]
+	inc ax
+	mov [x], ax
+	jmp .draw
+.draw:
+	call clear
+	mov ax, [x] ; Render the test sprite where it's supposed to be
+	mov bh, [y]
 	mov si, test_sprite
 	call sprite
-	mov ax, 220 ; Play a 220Hz square wave
-	call tone
-	mov ax, 500 ; Wait for 500ms
-	call delay
-	call mute ; Silence!
-.loop:
-	call input ; Collect input and display it as a pixel at (0, 0)
-	mov bl, al
-	xor ax, ax
-	xor bh, bh
-	call pixel
-	jmp .loop ; Let's do it again!
+	jmp game
+	x dw 0
+	y db 0
 test_sprite:
 	db 00000101b, 00111001b, 01110111b
 	db 00000101b, 00111001b, 01110111b
