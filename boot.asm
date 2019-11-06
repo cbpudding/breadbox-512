@@ -27,20 +27,20 @@ input: ; Sets al to a bitfield containing which of the eight keys on the map are
 .read:
 	in al, 64h ; Check if the keyboard has sent us any data
 	and al, 1
-	jnz .done ; Skip if no data is ready
+	jz .done ; Skip if no data is ready
 	in al, 60h ; Otherwise, check to see if the key is in the keymap
-	mov bh, al
+	mov bh, al ; bh = The keycode
 	and bh, 7Fh
-	mov bl, al
+	mov bl, al ; bl = Whether the key is pressed or not
 	and bl, 80h
-	mov cl, 1
-	mov si, keymap
+	mov cl, 1 ; cl = The bitmask for creating the status byte
+	mov si, keymap ; si = The keymap to check
 .scan:
-	lodsb
-	cmp al, bh
-	je .toggle
-	shl cl, 1
-	cmp cl, 0
+	lodsb ; Load the next keycode to check
+	cmp al, bh ; Compare it to the keycode we've received
+	je .toggle ; If it's the same, toggle the bit in the status byte
+	shl cl, 1 ; Otherwise, shift the bitmask over to the next position
+	cmp cl, 0 ; If the bit no longer exists, the keycode doesn't exist in the keymap
 	jz .read
 	jmp .scan
 .toggle:
@@ -197,18 +197,29 @@ set_keymap: ; si = Keys to map
 	keymap db 17, 30, 31, 32, 22, 35, 36, 37 ; W, A, S, D, U, H, J, K
 	times 363-($-$$) db 0
 game:
-	mov al, 5 ; Set to palette number 5
+	mov al, 5 ; Set the color palette number 5
 	call set_palette
 	xor ax, ax ; Draw the sprite at (0, 0)
-	mov bx, 256
+	xor bx, bx
 	mov si, test_sprite
 	call sprite
-	mov ax, 220 ; 220Hz square wave
+	mov ax, 220 ; Play a 220Hz square wave
 	call tone
 	mov ax, 50 ; 50ms delay
 	call delay
-	call mute ; Mute the speaker
-test_sprite:
+	call mute ; Silence!
+.loop:
+	call input ; Get the input as al
+	push ax ; Display the keyboard input as a pixel
+	shr al, 3
+	call set_palette
+	pop ax
+	mov bl, al
+	xor ax, ax
+	xor bh, bh
+	call pixel
+	jmp .loop
+test_sprite: ; Robot from Berzerk(Thanks for the suggestion Glenn!)
 	db 00000001b, 10110110b, 11000000b
 	db 00000000b, 00110110b, 11011000b
 	db 01101101b, 10110110b, 11011011b
